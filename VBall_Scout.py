@@ -285,10 +285,10 @@ if st.session_state.scraped_stats:
                 st.session_state.home_table = pd.DataFrame(home_team_data)[cols]
                 st.session_state.opp_table = pd.DataFrame(opponents_data)[cols]
 
-# ALWAYS DISPLAY TABLES IF THEY EXIST IN MEMORY
+# ALWAYS DISPLAY CARDS IF THEY EXIST IN MEMORY
 if st.session_state.home_table is not None and st.session_state.opp_table is not None:
     
-    # --- NEW: LIGHTWEIGHT REFRESH BUTTON ---
+    # --- REFRESH BUTTON ---
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("🔄 Refresh Live Scores"):
@@ -297,29 +297,49 @@ if st.session_state.home_table is not None and st.session_state.opp_table is not
                     fresh_stats = scrape_pool_data(pool_url)
                     
                     if fresh_stats:
-                        # Update Home Team
                         for scraped_name, stats in fresh_stats.items():
                             if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
                                 st.session_state.home_table.at[0, 'Pool (Match)'] = stats['Pool (Match)']
                                 st.session_state.home_table.at[0, 'Pool (Set)'] = stats['Pool (Set)']
                                 break
                         
-                        # Update Opponents
                         for index, row in st.session_state.opp_table.iterrows():
                             opp_name = row['Team']
                             if opp_name in fresh_stats:
                                 st.session_state.opp_table.at[index, 'Pool (Match)'] = fresh_stats[opp_name]['Pool (Match)']
                                 st.session_state.opp_table.at[index, 'Pool (Set)'] = fresh_stats[opp_name]['Pool (Set)']
                         
-                        st.rerun() # Instantly redraw the screen with new stats
+                        st.rerun() 
             else:
                 st.warning("Please enter a valid pool link at the top to refresh.")
 
+    # --- MOBILE SCOUT CARDS: HOME TEAM ---
     st.write(f"### 🌊 {selected_team}")
-    st.dataframe(st.session_state.home_table, hide_index=True)
+    for index, row in st.session_state.home_table.iterrows():
+        with st.container(border=True):
+            st.markdown(f"#### {row['Team']}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Pool (M)", row['Pool (Match)'])
+            c2.metric("Pool (S)", row['Pool (Set)'])
+            c3.metric("Region Rank", f"#{row['Region Rank']}")
+            
+            c4, c5 = st.columns(2)
+            c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
+            c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
     
+    # --- MOBILE SCOUT CARDS: OPPONENTS ---
     st.write("### 🛡️ Opponents")
-    st.dataframe(st.session_state.opp_table, hide_index=True)
+    for index, row in st.session_state.opp_table.iterrows():
+        with st.container(border=True):
+            st.markdown(f"#### {row['Team']}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Pool (M)", row['Pool (Match)'])
+            c2.metric("Pool (S)", row['Pool (Set)'])
+            c3.metric("Region Rank", f"#{row['Region Rank']}")
+            
+            c4, c5 = st.columns(2)
+            c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
+            c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
 
 st.divider()
 st.page_link("pages/1_Region_Rankings.py", label="View Region Power Rankings", icon="🌎")
