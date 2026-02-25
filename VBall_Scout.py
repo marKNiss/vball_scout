@@ -12,6 +12,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 import time
 import re
+import shutil  # Added to detect cloud vs local
 
 st.set_page_config(page_title="Vball Scout", page_icon="🏐", layout="wide")
 st.title("🏐 Vball Scout")
@@ -158,10 +159,17 @@ if st.button("1. Load Tournament Data") and pool_url:
             options.add_argument('--headless')
             options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080')
-            options.add_argument('--no-sandbox')               # Cloud-safe tweak
-            options.add_argument('--disable-dev-shm-usage')    # Cloud-safe tweak
+            options.add_argument('--no-sandbox')               
+            options.add_argument('--disable-dev-shm-usage')    
             
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            # Cloud vs Local Setup
+            if shutil.which("chromium"):
+                options.binary_location = shutil.which("chromium")
+                svc = Service(shutil.which("chromedriver"))
+            else:
+                svc = Service(ChromeDriverManager().install())
+                
+            driver = webdriver.Chrome(service=svc, options=options)
             
             try:
                 driver.get(pool_url)
@@ -218,10 +226,17 @@ if st.session_state.scraped_stats:
                 options.add_argument('--headless')
                 options.add_argument('--disable-gpu')
                 options.add_argument('--window-size=1920,1080')
-                options.add_argument('--no-sandbox')               # Cloud-safe tweak
-                options.add_argument('--disable-dev-shm-usage')    # Cloud-safe tweak
+                options.add_argument('--no-sandbox')               
+                options.add_argument('--disable-dev-shm-usage')    
                 
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+                # Cloud vs Local Setup
+                if shutil.which("chromium"):
+                    options.binary_location = shutil.which("chromium")
+                    svc = Service(shutil.which("chromedriver"))
+                else:
+                    svc = Service(ChromeDriverManager().install())
+                    
+                driver = webdriver.Chrome(service=svc, options=options)
                 
                 # --- 1. PROCESS OUR OWN TEAM ---
                 our_live_stats = {"Pool (Match)": "0-0", "Pool (Set)": "0-0"}
