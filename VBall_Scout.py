@@ -1,0 +1,279 @@
+import streamlit as st
+import pandas as pd
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
+import time
+import re
+
+st.set_page_config(page_title="Vball Scout", page_icon="🏐", layout="wide")
+st.title("🏐 Vball Scout")
+
+st.subheader("Match Setup")
+
+# Team Directory
+team_directory = {
+    "WF Waves 17-Brandy": {"code": "G17WAVES1GC", "age": "U17", "region": "GC", "search_name": "WF Waves 17-Brandy"},
+    "WF Waves 13-Natalie": {"code": "G13WAVES2GC", "age": "U13", "region": "GC", "search_name": "WF Waves 13-Natalie"}
+}
+selected_team = st.selectbox("Select Your Team:", list(team_directory.keys()))
+team_data = team_directory[selected_team]
+
+data_source = st.radio("Select Data Source:", ["AES", "SportsWrench"], horizontal=True)
+
+pool_url = st.text_input("Post today's AES Pool/Bracket overview link:")
+
+st.divider()
+
+# Initialize memory state
+if 'scraped_stats' not in st.session_state:
+    st.session_state.scraped_stats = {}
+if 'home_table' not in st.session_state:
+    st.session_state.home_table = None
+if 'opp_table' not in st.session_state:
+    st.session_state.opp_table = None
+
+# --- HELPER: SEARCH A SPECIFIC AES RANKINGS URL ---
+def search_aes_database(driver, url, search_term):
+    try:
+        driver.get(url)
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Team Name']"))
+        )
+        time.sleep(2)
+        
+        search_boxes = driver.find_elements(By.XPATH, "//input[@placeholder='Team Name']")
+        for box in search_boxes:
+            if box.is_displayed():
+                box.click() 
+                box.clear()
+                
+                for char in search_term:
+                    box.send_keys(char)
+                    time.sleep(0.05) 
+                
+                time.sleep(1) 
+                box.send_keys(Keys.RETURN)
+                break 
+        
+        time.sleep(4) 
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        first_word = search_term.split()[0].lower() 
+        
+        potential_rows = soup.find_all(lambda tag: tag.name in ['tr', 'div'] and first_word in tag.text.lower())
+        for row in potential_rows:
+            cols = [t.strip() for t in row.stripped_strings if t.strip()]
+            if len(cols) >= 5 and cols[0].isdigit():
+                if first_word in row.text.lower():
+                    return cols
+    except Exception as e:
+        print(f"URL Search Error: {e}")
+    return None
+
+# --- PHASE 2: LIVE RANKINGS ENGINE ---
+def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
+    search_term = re.sub(r'\(.*?\)', '', opponent_name).strip()
+    if '-' in search_term:
+        search_term = search_term.split('-')[0].strip()
+
+    # 1. Fetch USAV National Rank & Season W/L
+    usav_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/usav"
+    usav_cols = search_aes_database(driver, usav_url, search_term)
+    
+    usav_rank = "N/A"
+    usav_season_g = "N/A"
+    if usav_cols:
+        usav_rank = usav_cols[0]
+        wins = usav_cols[2] if usav_cols[2].isdigit() else "0"
+        losses = usav_cols[3] if usav_cols[3].isdigit() else "0"
+        usav_season_g = f"{wins}-{losses}"
+
+    # 2. Fetch AES Power Rank & Season W/L
+    aes_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/aes"
+    aes_cols = search_aes_database(driver, aes_url, search_term)
+    
+    aes_rank = "N/A"
+    aes_season_g = "N/A"
+    if aes_cols:
+        aes_rank = aes_cols[0]
+        wins = aes_cols[2] if aes_cols[2].isdigit() else "0"
+        losses = aes_cols[3] if aes_cols[3].isdigit() else "0"
+        aes_season_g = f"{wins}-{losses}"
+
+    # 3. Fetch Region Rank 
+    region_rank = "N/A"
+    region_code = None
+    
+    region_match = re.search(r'\(([A-Z]{2})\)', opponent_name)
+    if region_match:
+        region_code = region_match.group(1)
+    elif home_region:
+        region_code = home_region
+
+    if region_code and aes_cols:
+        try:
+            region_select = Select(driver.find_element(By.NAME, "region"))
+            for option in region_select.options:
+                if f"({region_code})" in option.text or option.get_attribute("value") == region_code:
+                    region_select.select_by_visible_text(option.text)
+                    time.sleep(3) 
+                    
+                    soup = BeautifulSoup(driver.page_source, 'html.parser')
+                    first_word = search_term.split()[0].lower()
+                    
+                    potential_rows = soup.find_all(lambda tag: tag.name in ['tr', 'div'] and first_word in tag.text.lower())
+                    for row in potential_rows:
+                        cols = [t.strip() for t in row.stripped_strings if t.strip()]
+                        if len(cols) >= 5 and cols[0].isdigit():
+                            if first_word in row.text.lower():
+                                region_rank = cols[0]
+                                break
+                    break
+        except Exception as e:
+            print(f"Region rank fetch error for {opponent_name}: {e}")
+
+    return {
+        "USAV Season (G)": usav_season_g,
+        "AES Season (G)": aes_season_g,
+        "USAV Rank": usav_rank,
+        "AES Rank": aes_rank,
+        "Region Rank": region_rank
+    }
+
+# --- PHASE 1: PULL THE MASTER DIVISION LIST ---
+if st.button("1. Load Tournament Data") and pool_url:
+    if data_source == "SportsWrench":
+        st.info("🚧 SportsWrench integration is coming in the next update! Please select AES for now.")
+    else:
+        with st.spinner("Extracting and alphabetizing the division..."):
+            options = Options()
+            options.add_argument('--headless')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--window-size=1920,1080')
+            options.add_argument('--no-sandbox')               # Cloud-safe tweak
+            options.add_argument('--disable-dev-shm-usage')    # Cloud-safe tweak
+            
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            
+            try:
+                driver.get(pool_url)
+                WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "k-grid-table")))
+                time.sleep(3) 
+                
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
+                driver.quit()
+                
+                temp_stats = {}
+                for table in soup.find_all('table', class_='k-grid-table'):
+                    for row in table.find_all('tr'):
+                        cols = [c.text.strip().replace('‡', '').replace('†', '') for c in row.find_all('td') if c.text.strip()]
+                        if len(cols) >= 5:
+                            team_name = next((c for c in cols if len(c) > 3 and not c.replace('%', '').replace('.', '').isdigit()), "")
+                            digits = [c for c in cols if c.isdigit() or c == '-']
+                            digits = ['0' if x == '-' else x for x in digits]
+                            
+                            if team_name and len(digits) >= 4:
+                                temp_stats[team_name] = {
+                                    "Pool (Match)": f"{digits[0]}-{digits[1]}",
+                                    "Pool (Set)": f"{digits[2]}-{digits[3]}"
+                                }
+                
+                if temp_stats:
+                    st.session_state.scraped_stats = temp_stats
+                    st.success(f"Successfully loaded and sorted {len(temp_stats)} teams!")
+                else:
+                    st.error("⚠️ Couldn't find the team list. Check the link.")
+                    
+            except Exception as e:
+                driver.quit()
+                st.error(f"⚠️ Scraper timed out. Error: {e}")
+
+# --- THE UI: SEARCH & GENERATE ---
+if st.session_state.scraped_stats:
+    st.write("### 🔍 Scout Opponents")
+    sorted_team_names = sorted(list(st.session_state.scraped_stats.keys()))
+    
+    selected_opponents = st.multiselect(
+        "Search and select opponents to build your radar:", 
+        options=sorted_team_names,
+        help="Type a team name to filter the list."
+    )
+    
+    st.divider()
+    
+    if st.button("2. Run Vball Scout"):
+        if not selected_opponents:
+            st.warning("⚠️ Please select at least one team.")
+        else:
+            with st.spinner("Firing up the Rankings Engine... this takes a few seconds per team."):
+                options = Options()
+                options.add_argument('--headless')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument('--no-sandbox')               # Cloud-safe tweak
+                options.add_argument('--disable-dev-shm-usage')    # Cloud-safe tweak
+                
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+                
+                # --- 1. PROCESS OUR OWN TEAM ---
+                our_live_stats = {"Pool (Match)": "0-0", "Pool (Set)": "0-0"}
+                for scraped_name, stats in st.session_state.scraped_stats.items():
+                    if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
+                        our_live_stats = stats
+                        break
+                
+                our_season_stats = fetch_seasonal_rankings(driver, team_data["search_name"], team_data["age"], team_data["region"])
+                
+                home_team_data = [{
+                    "Team": selected_team,
+                    "Pool (Match)": our_live_stats["Pool (Match)"],
+                    "Pool (Set)": our_live_stats["Pool (Set)"],
+                    "USAV Season (G)": our_season_stats["USAV Season (G)"],
+                    "AES Season (G)": our_season_stats["AES Season (G)"],
+                    "USAV Rank": our_season_stats["USAV Rank"],
+                    "AES Rank": our_season_stats["AES Rank"],
+                    "Region Rank": our_season_stats["Region Rank"]
+                }]
+                
+                # --- 2. PROCESS OPPONENTS ---
+                opponents_data = []
+                for opp_name in selected_opponents:
+                    live_stats = st.session_state.scraped_stats[opp_name]
+                    seasonal = fetch_seasonal_rankings(driver, opp_name, team_data["age"])
+                    
+                    opponents_data.append({
+                        "Team": opp_name,
+                        "Pool (Match)": live_stats["Pool (Match)"],
+                        "Pool (Set)": live_stats["Pool (Set)"],
+                        "USAV Season (G)": seasonal["USAV Season (G)"],
+                        "AES Season (G)": seasonal["AES Season (G)"],
+                        "USAV Rank": seasonal["USAV Rank"],
+                        "AES Rank": seasonal["AES Rank"],
+                        "Region Rank": seasonal["Region Rank"]
+                    })
+                
+                driver.quit()
+                
+                cols = ["Team", "Pool (Match)", "Pool (Set)", "USAV Season (G)", "AES Season (G)", "USAV Rank", "AES Rank", "Region Rank"]
+                
+                st.session_state.home_table = pd.DataFrame(home_team_data)[cols]
+                st.session_state.opp_table = pd.DataFrame(opponents_data)[cols]
+
+# ALWAYS DISPLAY TABLES IF THEY EXIST IN MEMORY
+if st.session_state.home_table is not None and st.session_state.opp_table is not None:
+    st.write(f"### 🌊 {selected_team}")
+    st.dataframe(st.session_state.home_table, hide_index=True)
+    
+    st.write("### 🛡️ Opponents")
+    st.dataframe(st.session_state.opp_table, hide_index=True)
+
+st.divider()
+st.page_link("pages/1_Region_Rankings.py", label="View Region Power Rankings", icon="🌎")
