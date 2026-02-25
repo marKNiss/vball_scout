@@ -15,7 +15,7 @@ import re
 import shutil
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Volleyball Scout", page_icon="🏐", layout="wide")
+st.set_page_config(page_title="Vball Scout", page_icon="🏐", layout="wide")
 
 # --- CUSTOM CSS STYLING ---
 st.markdown("""
@@ -29,31 +29,6 @@ st.markdown("""
     /* Headings on the main background */
     h1, h2, h3, .stMarkdown p {
         color: #ffffff !important;
-    }
-
-    /* TILE STYLING (Containers with borders) */
-    [data-testid="stVerticalBlock"] > [style*="border"] {
-        background-color: #ffffff; /* White background for tiles */
-        border: 2px solid #00c8d7 !important; /* Teal border */
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
-    }
-
-    /* Text inside White Tiles */
-    [data-testid="stVerticalBlock"] > [style*="border"] h4 {
-        color: #0a192f !important; /* Navy Blue for team names */
-        font-weight: bold;
-    }
-
-    /* METRIC STYLING inside tiles */
-    [data-testid="stMetricLabel"] {
-        color: #0a192f !important; /* Navy Blue */
-        font-weight: 600;
-    }
-    [data-testid="stMetricValue"] {
-        color: #00c8d7 !important; /* Teal for the stats */
-        font-weight: bold;
     }
 
     /* INPUT WIDGET STYLING */
@@ -89,6 +64,8 @@ st.markdown("""
     /* DIVIDER STYLING */
     hr {
         border-color: #00c8d7 !important; /* Teal dividers */
+        margin-top: 1rem;
+        margin-bottom: 1rem;
     }
 
     /* PAGE LINK STYLING */
@@ -102,7 +79,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏐 Volleyball Scout")
+st.title("🏐 Vball Scout")
 st.subheader("Match Setup")
 
 # Team Directory
@@ -111,7 +88,7 @@ team_directory = {
     "WF Waves 13-Natalie": {"code": "G13WAVES2GC", "age": "U13", "region": "GC", "search_name": "WF Waves 13-Natalie"}
 }
 
-# Place inputs in a container to apply the white tile styling
+# Input Section
 with st.container(border=True):
     selected_team = st.selectbox("Select Your Team:", list(team_directory.keys()))
     team_data = team_directory[selected_team]
@@ -218,7 +195,6 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
     if '-' in search_term:
         search_term = search_term.split('-')[0].strip()
 
-    # 1. Fetch USAV National Rank & Season W/L
     usav_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/usav"
     usav_cols = search_aes_database(driver, usav_url, search_term)
 
@@ -230,7 +206,6 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
         losses = usav_cols[3] if usav_cols[3].isdigit() else "0"
         usav_season_g = f"{wins}-{losses}"
 
-    # 2. Fetch AES Power Rank & Season W/L
     aes_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/aes"
     aes_cols = search_aes_database(driver, aes_url, search_term)
 
@@ -242,7 +217,6 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
         losses = aes_cols[3] if aes_cols[3].isdigit() else "0"
         aes_season_g = f"{wins}-{losses}"
 
-    # 3. Fetch Region Rank
     region_rank = "N/A"
     region_code = None
 
@@ -314,123 +288,4 @@ if st.session_state.scraped_stats:
 
     if st.button("2. Run Vball Scout"):
         if not selected_opponents:
-            st.warning("⚠️ Please select at least one team.")
-        else:
-            with st.spinner("Firing up the Rankings Engine... this takes a few seconds per team."):
-                options = Options()
-                options.add_argument('--headless')
-                options.add_argument('--disable-gpu')
-                options.add_argument('--window-size=1920,1080')
-                options.add_argument('--no-sandbox')
-                options.add_argument('--disable-dev-shm-usage')
-
-                if shutil.which("chromium"):
-                    options.binary_location = shutil.which("chromium")
-                    svc = Service(shutil.which("chromedriver"))
-                else:
-                    svc = Service(ChromeDriverManager().install())
-
-                driver = webdriver.Chrome(service=svc, options=options)
-
-                # --- 1. PROCESS OUR OWN TEAM ---
-                our_live_stats = {"Pool (Match)": "0-0", "Pool (Set)": "0-0"}
-                for scraped_name, stats in st.session_state.scraped_stats.items():
-                    if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
-                        our_live_stats = stats
-                        break
-
-                our_season_stats = fetch_seasonal_rankings(driver, team_data["search_name"], team_data["age"], team_data["region"])
-
-                home_team_data = [{
-                    "Team": selected_team,
-                    "Pool (Match)": our_live_stats["Pool (Match)"],
-                    "Pool (Set)": our_live_stats["Pool (Set)"],
-                    "USAV Season (G)": our_season_stats["USAV Season (G)"],
-                    "AES Season (G)": our_season_stats["AES Season (G)"],
-                    "USAV Rank": our_season_stats["USAV Rank"],
-                    "AES Rank": our_season_stats["AES Rank"],
-                    "Region Rank": our_season_stats["Region Rank"]
-                }]
-
-                # --- 2. PROCESS OPPONENTS ---
-                opponents_data = []
-                for opp_name in selected_opponents:
-                    live_stats = st.session_state.scraped_stats[opp_name]
-                    seasonal = fetch_seasonal_rankings(driver, opp_name, team_data["age"])
-
-                    opponents_data.append({
-                        "Team": opp_name,
-                        "Pool (Match)": live_stats["Pool (Match)"],
-                        "Pool (Set)": live_stats["Pool (Set)"],
-                        "USAV Season (G)": seasonal["USAV Season (G)"],
-                        "AES Season (G)": seasonal["AES Season (G)"],
-                        "USAV Rank": seasonal["USAV Rank"],
-                        "AES Rank": seasonal["AES Rank"],
-                        "Region Rank": seasonal["Region Rank"]
-                    })
-
-                driver.quit()
-
-                cols = ["Team", "Pool (Match)", "Pool (Set)", "USAV Season (G)", "AES Season (G)", "USAV Rank", "AES Rank", "Region Rank"]
-
-                st.session_state.home_table = pd.DataFrame(home_team_data)[cols]
-                st.session_state.opp_table = pd.DataFrame(opponents_data)[cols]
-
-# ALWAYS DISPLAY CARDS IF THEY EXIST IN MEMORY
-if st.session_state.home_table is not None and st.session_state.opp_table is not None:
-
-    # --- REFRESH BUTTON ---
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("🔄 Refresh Live Scores"):
-            if pool_url:
-                with st.spinner("Fetching latest pool results..."):
-                    fresh_stats = scrape_pool_data(pool_url)
-
-                    if fresh_stats:
-                        for scraped_name, stats in fresh_stats.items():
-                            if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
-                                st.session_state.home_table.at[0, 'Pool (Match)'] = stats['Pool (Match)']
-                                st.session_state.home_table.at[0, 'Pool (Set)'] = stats['Pool (Set)']
-                                break
-
-                        for index, row in st.session_state.opp_table.iterrows():
-                            opp_name = row['Team']
-                            if opp_name in fresh_stats:
-                                st.session_state.opp_table.at[index, 'Pool (Match)'] = fresh_stats[opp_name]['Pool (Match)']
-                                st.session_state.opp_table.at[index, 'Pool (Set)'] = fresh_stats[opp_name]['Pool (Set)']
-
-                        st.rerun()
-            else:
-                st.warning("Please enter a valid pool link at the top to refresh.")
-
-    # --- MOBILE SCOUT CARDS: HOME TEAM ---
-    st.write(f"### 🌊 {selected_team}")
-    for index, row in st.session_state.home_table.iterrows():
-        with st.container(border=True):
-            st.markdown(f"#### {row['Team']}")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Pool (M)", row['Pool (Match)'])
-            c2.metric("Pool (S)", row['Pool (Set)'])
-            c3.metric("Region Rank", f"#{row['Region Rank']}")
-
-            c4, c5 = st.columns(2)
-            c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
-            c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
-
-    # --- MOBILE SCOUT CARDS: OPPONENTS ---
-    st.write("### 🛡️ Opponents")
-    for index, row in st.session_state.opp_table.iterrows():
-        with st.container(border=True):
-            st.markdown(f"#### {row['Team']}")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Pool (M)", row['Pool (Match)'])
-            c2.metric("Pool (S)", row['Pool (Set)'])
-            c3.metric("Region Rank", f"#{row['Region Rank']}")
-
-            c4, c5 = st.columns(2)
-            c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
-            c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
-
-st.divider()
-st.page_link("pages/1_Region_Rankings.py", label="View Region Power Rankings", icon="🌎")
+            st.warning
