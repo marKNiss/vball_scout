@@ -12,10 +12,112 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 import time
 import re
-import shutil  
+import shutil
+from PIL import Image
 
-st.set_page_config(page_title="Vball Scout", page_icon="🏐", layout="wide")
-st.title("🏐 Vball Scout")
+# --- PAGE CONFIGURATION ---
+# Set the page title and use the WF Waves logo as the favicon
+st.set_page_config(page_title="WF Waves Scout", page_icon="image_7.png", layout="wide")
+
+# --- CUSTOM CSS STYLING ---
+# This block injects custom CSS to override Streamlit's default styling
+# and implement the WF Waves Navy, White, and Teal theme.
+st.markdown("""
+    <style>
+    /* Main App Background - Dark Navy */
+    .stApp {
+        background-color: #0a192f; /* Deep Navy Blue */
+        color: #ffffff; /* White text for main background */
+    }
+    
+    /* Headings on the main background */
+    h1, h2, h3, .stMarkdown p {
+        color: #ffffff !important;
+    }
+
+    /* TILE STYLING (Containers with borders) */
+    /* Target the containers we created with st.container(border=True) */
+    [data-testid="stVerticalBlock"] > [style*="border"] {
+        background-color: #ffffff; /* White background for tiles */
+        border: 2px solid #00c8d7 !important; /* Teal border */
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+    }
+
+    /* Text inside White Tiles */
+    [data-testid="stVerticalBlock"] > [style*="border"] h4 {
+        color: #0a192f !important; /* Navy Blue for team names */
+        font-weight: bold;
+    }
+
+    /* METRIC STYLING inside tiles */
+    /* Label (e.g., "Pool (M)") */
+    [data-testid="stMetricLabel"] {
+        color: #0a192f !important; /* Navy Blue */
+        font-weight: 600;
+    }
+    /* Value (e.g., "3-0") */
+    [data-testid="stMetricValue"] {
+        color: #00c8d7 !important; /* Teal for the stats */
+        font-weight: bold;
+    }
+
+    /* INPUT WIDGET STYLING (Selectboxes, Text Inputs) */
+    /* The clickable area of the selectbox and input fields */
+    .stSelectbox > div > div, .stTextInput > div > div {
+        background-color: #ffffff !important;
+        color: #0a192f !important;
+        border: 2px solid #00c8d7 !important;
+        border-radius: 8px;
+    }
+    /* The text inside the inputs */
+    .stSelectbox [data-baseweb="select"] span, .stTextInput input {
+       color: #0a192f !important;
+    }
+    /* Multiselect tags */
+    .stMultiSelect [data-baseweb="tag"] {
+        background-color: #00c8d7 !important; /* Teal background for tags */
+        color: #ffffff !important; /* White text */
+    }
+
+    /* BUTTON STYLING */
+    .stButton button {
+        background-color: #ffffff !important;
+        color: #0a192f !important;
+        border: 2px solid #00c8d7 !important;
+        border-radius: 8px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .stButton button:hover {
+        background-color: #00c8d7 !important; /* Teal background on hover */
+        color: #ffffff !important; /* White text on hover */
+        border-color: #ffffff !important;
+    }
+
+    /* DIVIDER STYLING */
+    hr {
+        border-color: #00c8d7 !important; /* Teal dividers */
+    }
+
+    /* PAGE LINK STYLING at the bottom */
+    .stPageLink a {
+        background-color: #ffffff !important;
+        color: #0a192f !important;
+        border: 2px solid #00c8d7 !important;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- APP HEADER ---
+# Use columns to center the logo nicely
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    # Display the WF Waves logo
+    st.image("image_7.png", use_column_width=True)
 
 st.subheader("Match Setup")
 
@@ -24,12 +126,14 @@ team_directory = {
     "WF Waves 17-Brandy": {"code": "G17WAVES1GC", "age": "U17", "region": "GC", "search_name": "WF Waves 17-Brandy"},
     "WF Waves 13-Natalie": {"code": "G13WAVES2GC", "age": "U13", "region": "GC", "search_name": "WF Waves 13-Natalie"}
 }
-selected_team = st.selectbox("Select Your Team:", list(team_directory.keys()))
-team_data = team_directory[selected_team]
+# Place inputs in a container to apply the white tile styling
+with st.container(border=True):
+    selected_team = st.selectbox("Select Your Team:", list(team_directory.keys()))
+    team_data = team_directory[selected_team]
 
-data_source = st.radio("Select Data Source:", ["AES", "SportsWrench"], horizontal=True)
+    data_source = st.radio("Select Data Source:", ["AES", "SportsWrench"], horizontal=True)
 
-pool_url = st.text_input("Post today's AES Pool/Bracket overview link:")
+    pool_url = st.text_input("Post today's AES Pool/Bracket overview link:")
 
 st.divider()
 
@@ -47,25 +151,25 @@ def scrape_pool_data(url):
     options.add_argument('--headless')
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
-    options.add_argument('--no-sandbox')               
-    options.add_argument('--disable-dev-shm-usage')    
-    
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+
     if shutil.which("chromium"):
         options.binary_location = shutil.which("chromium")
         svc = Service(shutil.which("chromedriver"))
     else:
         svc = Service(ChromeDriverManager().install())
-        
+
     driver = webdriver.Chrome(service=svc, options=options)
     temp_stats = {}
-    
+
     try:
         driver.get(url)
         WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "k-grid-table")))
-        time.sleep(3) 
-        
+        time.sleep(3)
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
+
         for table in soup.find_all('table', class_='k-grid-table'):
             for row in table.find_all('tr'):
                 cols = [c.text.strip().replace('‡', '').replace('†', '') for c in row.find_all('td') if c.text.strip()]
@@ -73,7 +177,7 @@ def scrape_pool_data(url):
                     team_name = next((c for c in cols if len(c) > 3 and not c.replace('%', '').replace('.', '').isdigit()), "")
                     digits = [c for c in cols if c.isdigit() or c == '-']
                     digits = ['0' if x == '-' else x for x in digits]
-                    
+
                     if team_name and len(digits) >= 4:
                         temp_stats[team_name] = {
                             "Pool (Match)": f"{digits[0]}-{digits[1]}",
@@ -83,7 +187,7 @@ def scrape_pool_data(url):
         print(f"Pool Scrape Error: {e}")
     finally:
         driver.quit()
-        
+
     return temp_stats
 
 # --- HELPER: SEARCH A SPECIFIC AES RANKINGS URL ---
@@ -94,26 +198,26 @@ def search_aes_database(driver, url, search_term):
             EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Team Name']"))
         )
         time.sleep(2)
-        
+
         search_boxes = driver.find_elements(By.XPATH, "//input[@placeholder='Team Name']")
         for box in search_boxes:
             if box.is_displayed():
-                box.click() 
+                box.click()
                 box.clear()
-                
+
                 for char in search_term:
                     box.send_keys(char)
-                    time.sleep(0.05) 
-                
-                time.sleep(1) 
+                    time.sleep(0.05)
+
+                time.sleep(1)
                 box.send_keys(Keys.RETURN)
-                break 
-        
-        time.sleep(4) 
-        
+                break
+
+        time.sleep(4)
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        first_word = search_term.split()[0].lower() 
-        
+        first_word = search_term.split()[0].lower()
+
         potential_rows = soup.find_all(lambda tag: tag.name in ['tr', 'div'] and first_word in tag.text.lower())
         for row in potential_rows:
             cols = [t.strip() for t in row.stripped_strings if t.strip()]
@@ -133,7 +237,7 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
     # 1. Fetch USAV National Rank & Season W/L
     usav_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/usav"
     usav_cols = search_aes_database(driver, usav_url, search_term)
-    
+
     usav_rank = "N/A"
     usav_season_g = "N/A"
     if usav_cols:
@@ -145,7 +249,7 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
     # 2. Fetch AES Power Rank & Season W/L
     aes_url = f"https://www.advancedeventsystems.com/rankings/Female/{age_group}/aes"
     aes_cols = search_aes_database(driver, aes_url, search_term)
-    
+
     aes_rank = "N/A"
     aes_season_g = "N/A"
     if aes_cols:
@@ -154,10 +258,10 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
         losses = aes_cols[3] if aes_cols[3].isdigit() else "0"
         aes_season_g = f"{wins}-{losses}"
 
-    # 3. Fetch Region Rank 
+    # 3. Fetch Region Rank
     region_rank = "N/A"
     region_code = None
-    
+
     region_match = re.search(r'\(([A-Z]{2})\)', opponent_name)
     if region_match:
         region_code = region_match.group(1)
@@ -170,11 +274,11 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
             for option in region_select.options:
                 if f"({region_code})" in option.text or option.get_attribute("value") == region_code:
                     region_select.select_by_visible_text(option.text)
-                    time.sleep(3) 
-                    
+                    time.sleep(3)
+
                     soup = BeautifulSoup(driver.page_source, 'html.parser')
                     first_word = search_term.split()[0].lower()
-                    
+
                     potential_rows = soup.find_all(lambda tag: tag.name in ['tr', 'div'] and first_word in tag.text.lower())
                     for row in potential_rows:
                         cols = [t.strip() for t in row.stripped_strings if t.strip()]
@@ -195,13 +299,15 @@ def fetch_seasonal_rankings(driver, opponent_name, age_group, home_region=None):
     }
 
 # --- PHASE 1: PULL THE MASTER DIVISION LIST ---
-if st.button("1. Load Tournament Data") and pool_url:
-    if data_source == "SportsWrench":
+if st.button("1. Load Tournament Data"):
+    if not pool_url:
+        st.warning("Please paste a pool link first.")
+    elif data_source == "SportsWrench":
         st.info("🚧 SportsWrench integration is coming in the next update! Please select AES for now.")
     else:
         with st.spinner("Extracting and alphabetizing the division..."):
             temp_stats = scrape_pool_data(pool_url)
-            
+
             if temp_stats:
                 st.session_state.scraped_stats = temp_stats
                 st.success(f"Successfully loaded and sorted {len(temp_stats)} teams!")
@@ -212,15 +318,17 @@ if st.button("1. Load Tournament Data") and pool_url:
 if st.session_state.scraped_stats:
     st.write("### 🔍 Scout Opponents")
     sorted_team_names = sorted(list(st.session_state.scraped_stats.keys()))
-    
-    selected_opponents = st.multiselect(
-        "Search and select opponents to build your radar:", 
-        options=sorted_team_names,
-        help="Type a team name to filter the list."
-    )
-    
+
+    # Wrap the multiselect in a white tile
+    with st.container(border=True):
+        selected_opponents = st.multiselect(
+            "Search and select opponents to build your radar:",
+            options=sorted_team_names,
+            help="Type a team name to filter the list."
+        )
+
     st.divider()
-    
+
     if st.button("2. Run Vball Scout"):
         if not selected_opponents:
             st.warning("⚠️ Please select at least one team.")
@@ -230,26 +338,26 @@ if st.session_state.scraped_stats:
                 options.add_argument('--headless')
                 options.add_argument('--disable-gpu')
                 options.add_argument('--window-size=1920,1080')
-                options.add_argument('--no-sandbox')               
-                options.add_argument('--disable-dev-shm-usage')    
-                
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+
                 if shutil.which("chromium"):
                     options.binary_location = shutil.which("chromium")
                     svc = Service(shutil.which("chromedriver"))
                 else:
                     svc = Service(ChromeDriverManager().install())
-                    
+
                 driver = webdriver.Chrome(service=svc, options=options)
-                
+
                 # --- 1. PROCESS OUR OWN TEAM ---
                 our_live_stats = {"Pool (Match)": "0-0", "Pool (Set)": "0-0"}
                 for scraped_name, stats in st.session_state.scraped_stats.items():
                     if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
                         our_live_stats = stats
                         break
-                
+
                 our_season_stats = fetch_seasonal_rankings(driver, team_data["search_name"], team_data["age"], team_data["region"])
-                
+
                 home_team_data = [{
                     "Team": selected_team,
                     "Pool (Match)": our_live_stats["Pool (Match)"],
@@ -260,13 +368,13 @@ if st.session_state.scraped_stats:
                     "AES Rank": our_season_stats["AES Rank"],
                     "Region Rank": our_season_stats["Region Rank"]
                 }]
-                
+
                 # --- 2. PROCESS OPPONENTS ---
                 opponents_data = []
                 for opp_name in selected_opponents:
                     live_stats = st.session_state.scraped_stats[opp_name]
                     seasonal = fetch_seasonal_rankings(driver, opp_name, team_data["age"])
-                    
+
                     opponents_data.append({
                         "Team": opp_name,
                         "Pool (Match)": live_stats["Pool (Match)"],
@@ -277,17 +385,17 @@ if st.session_state.scraped_stats:
                         "AES Rank": seasonal["AES Rank"],
                         "Region Rank": seasonal["Region Rank"]
                     })
-                
+
                 driver.quit()
-                
+
                 cols = ["Team", "Pool (Match)", "Pool (Set)", "USAV Season (G)", "AES Season (G)", "USAV Rank", "AES Rank", "Region Rank"]
-                
+
                 st.session_state.home_table = pd.DataFrame(home_team_data)[cols]
                 st.session_state.opp_table = pd.DataFrame(opponents_data)[cols]
 
 # ALWAYS DISPLAY CARDS IF THEY EXIST IN MEMORY
 if st.session_state.home_table is not None and st.session_state.opp_table is not None:
-    
+
     # --- REFRESH BUTTON ---
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -295,21 +403,21 @@ if st.session_state.home_table is not None and st.session_state.opp_table is not
             if pool_url:
                 with st.spinner("Fetching latest pool results..."):
                     fresh_stats = scrape_pool_data(pool_url)
-                    
+
                     if fresh_stats:
                         for scraped_name, stats in fresh_stats.items():
                             if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
                                 st.session_state.home_table.at[0, 'Pool (Match)'] = stats['Pool (Match)']
                                 st.session_state.home_table.at[0, 'Pool (Set)'] = stats['Pool (Set)']
                                 break
-                        
+
                         for index, row in st.session_state.opp_table.iterrows():
                             opp_name = row['Team']
                             if opp_name in fresh_stats:
                                 st.session_state.opp_table.at[index, 'Pool (Match)'] = fresh_stats[opp_name]['Pool (Match)']
                                 st.session_state.opp_table.at[index, 'Pool (Set)'] = fresh_stats[opp_name]['Pool (Set)']
-                        
-                        st.rerun() 
+
+                        st.rerun()
             else:
                 st.warning("Please enter a valid pool link at the top to refresh.")
 
@@ -322,11 +430,11 @@ if st.session_state.home_table is not None and st.session_state.opp_table is not
             c1.metric("Pool (M)", row['Pool (Match)'])
             c2.metric("Pool (S)", row['Pool (Set)'])
             c3.metric("Region Rank", f"#{row['Region Rank']}")
-            
+
             c4, c5 = st.columns(2)
             c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
             c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
-    
+
     # --- MOBILE SCOUT CARDS: OPPONENTS ---
     st.write("### 🛡️ Opponents")
     for index, row in st.session_state.opp_table.iterrows():
@@ -336,7 +444,7 @@ if st.session_state.home_table is not None and st.session_state.opp_table is not
             c1.metric("Pool (M)", row['Pool (Match)'])
             c2.metric("Pool (S)", row['Pool (Set)'])
             c3.metric("Region Rank", f"#{row['Region Rank']}")
-            
+
             c4, c5 = st.columns(2)
             c4.metric("USAV Rank", f"#{row['USAV Rank']} ({row['USAV Season (G)']})")
             c5.metric("AES Rank", f"#{row['AES Rank']} ({row['AES Season (G)']})")
