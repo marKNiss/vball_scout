@@ -352,27 +352,36 @@ if st.session_state.scraped_stats:
 
 # --- HTML CARD GENERATOR FUNCTION ---
 def render_scout_card(row):
-    # Left-aligned HTML string prevents Streamlit from parsing it as a Markdown code block
-    card_html = f"""<div style="border: 2px solid #00c8d7; border-radius: 10px; padding: 12px; background-color: #112240; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-<h4 style="color: #ffffff; margin-top: 0px; margin-bottom: 10px; font-size: 1.1rem; font-weight: bold;">{row['Team']}</h4>
-<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-<div style="line-height: 1.1;">
-<span style="color: #00c8d7; font-size: 0.75rem; font-weight: 600;">Pool (Match)</span><br>
-<span style="color: #ffffff; font-size: 0.95rem; font-weight: bold;">{row['Pool (Match)']}</span>
-</div>
-<div style="line-height: 1.1;">
-<span style="color: #00c8d7; font-size: 0.75rem; font-weight: 600;">Pool (Set)</span><br>
-<span style="color: #ffffff; font-size: 0.95rem; font-weight: bold;">{row['Pool (Set)']}</span>
-</div>
-<div style="line-height: 1.1;">
-<span style="color: #00c8d7; font-size: 0.75rem; font-weight: 600;">Region Rank</span><br>
-<span style="color: #ffffff; font-size: 0.95rem; font-weight: bold;">#{row['Region Rank']}</span>
-</div>
-</div>
-<div style="display: flex; justify-content: space-between;">
-<div style="line-height: 1.1;">
-<span style="color: #00c8d7; font-size: 0.75rem; font-weight: 600;">USAV Rank</span><br>
-<span style="color: #ffffff; font-size: 0.95rem; font-weight: bold;">#{row['USAV Rank']} ({row['USAV Season (G)']})</span>
-</div>
-<div style="line-height: 1.1;">
-<span style="color: #00c8d7; font-size: 0.75rem; font-weight: 600;">
+    # Using parentheses allows us to format it cleanly without breaking Python or Streamlit
+    card_html = (
+        f"<div style='border: 2px solid #00c8d7; border-radius: 10px; padding: 12px; background-color: #112240; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'>"
+            f"<h4 style='color: #ffffff; margin-top: 0px; margin-bottom: 10px; font-size: 1.1rem; font-weight: bold;'>{row['Team']}</h4>"
+            
+            f"<div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>"
+                f"<div style='line-height: 1.1;'>"
+                    f"<span style='color: #00c8d7; font-size: 0.75rem; font-weight: 600;'>Pool (Match)</span><br>"
+                    f"<span style='color: #ffffff; font-size: 0.95rem; font-weight: bold;'>{row['Pool (Match)']}</span>"
+                f"</div>"
+                f"<div style='line-height: 1.1;'>"
+                    f"<span style='color: #00c8d7; font-size: 0.75rem; font-weight: 600;'>Pool (Set)</span><br>"
+                    f"<span style='color: #ffffff; font-size: 0.95rem; font-weight: bold;'>{row['Pool (Set)']}</span>"
+                f"</div>"
+                f"<div style='line-height: 1.1;'>"
+                    f"<span style='color: #00c8d7; font-size: 0.75rem; font-weight: 600;'>Region Rank</span><br>"
+                    f"<span style='color: #ffffff; font-size: 0.95rem; font-weight: bold;'>#{row['Region Rank']}</span>"
+                f"</div>"
+            f"</div>"
+            
+            f"<div style='display: flex; justify-content: space-between;'>"
+                f"<div style='line-height: 1.1;'>"
+                    f"<span style='color: #00c8d7; font-size: 0.75rem; font-weight: 600;'>USAV Rank</span><br>"
+                    f"<span style='color: #ffffff; font-size: 0.95rem; font-weight: bold;'>#{row['USAV Rank']} ({row['USAV Season (G)']})</span>"
+                f"</div>"
+                f"<div style='line-height: 1.1;'>"
+                    f"<span style='color: #00c8d7; font-size: 0.75rem; font-weight: 600;'>AES Rank</span><br>"
+                    f"<span style='color: #ffffff; font-size: 0.95rem; font-weight: bold;'>#{row['AES Rank']} ({row['AES Season (G)']})</span>"
+                f"</div>"
+            f"</div>"
+        f"</div>"
+    )
+    st.markdown(card_html, unsafe_allow_html=True)
