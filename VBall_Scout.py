@@ -13,15 +13,11 @@ from selenium.webdriver.support.ui import Select
 import time
 import re
 import shutil
-from PIL import Image
 
 # --- PAGE CONFIGURATION ---
-# Set the page title and use the WF Waves logo as the favicon
-st.set_page_config(page_title="WF Waves Scout", page_icon="image_7.png", layout="wide")
+st.set_page_config(page_title="Volleyball Scout", page_icon="🏐", layout="wide")
 
 # --- CUSTOM CSS STYLING ---
-# This block injects custom CSS to override Streamlit's default styling
-# and implement the WF Waves Navy, White, and Teal theme.
 st.markdown("""
     <style>
     /* Main App Background - Dark Navy */
@@ -36,7 +32,6 @@ st.markdown("""
     }
 
     /* TILE STYLING (Containers with borders) */
-    /* Target the containers we created with st.container(border=True) */
     [data-testid="stVerticalBlock"] > [style*="border"] {
         background-color: #ffffff; /* White background for tiles */
         border: 2px solid #00c8d7 !important; /* Teal border */
@@ -52,30 +47,25 @@ st.markdown("""
     }
 
     /* METRIC STYLING inside tiles */
-    /* Label (e.g., "Pool (M)") */
     [data-testid="stMetricLabel"] {
         color: #0a192f !important; /* Navy Blue */
         font-weight: 600;
     }
-    /* Value (e.g., "3-0") */
     [data-testid="stMetricValue"] {
         color: #00c8d7 !important; /* Teal for the stats */
         font-weight: bold;
     }
 
-    /* INPUT WIDGET STYLING (Selectboxes, Text Inputs) */
-    /* The clickable area of the selectbox and input fields */
+    /* INPUT WIDGET STYLING */
     .stSelectbox > div > div, .stTextInput > div > div {
         background-color: #ffffff !important;
         color: #0a192f !important;
         border: 2px solid #00c8d7 !important;
         border-radius: 8px;
     }
-    /* The text inside the inputs */
     .stSelectbox [data-baseweb="select"] span, .stTextInput input {
        color: #0a192f !important;
     }
-    /* Multiselect tags */
     .stMultiSelect [data-baseweb="tag"] {
         background-color: #00c8d7 !important; /* Teal background for tags */
         color: #ffffff !important; /* White text */
@@ -101,7 +91,7 @@ st.markdown("""
         border-color: #00c8d7 !important; /* Teal dividers */
     }
 
-    /* PAGE LINK STYLING at the bottom */
+    /* PAGE LINK STYLING */
     .stPageLink a {
         background-color: #ffffff !important;
         color: #0a192f !important;
@@ -112,13 +102,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- APP HEADER ---
-# Use columns to center the logo nicely
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    # Display the WF Waves logo
-    st.image("image_7.png", use_column_width=True)
-
+st.title("🏐 Volleyball Scout")
 st.subheader("Match Setup")
 
 # Team Directory
@@ -126,13 +110,13 @@ team_directory = {
     "WF Waves 17-Brandy": {"code": "G17WAVES1GC", "age": "U17", "region": "GC", "search_name": "WF Waves 17-Brandy"},
     "WF Waves 13-Natalie": {"code": "G13WAVES2GC", "age": "U13", "region": "GC", "search_name": "WF Waves 13-Natalie"}
 }
+
 # Place inputs in a container to apply the white tile styling
 with st.container(border=True):
     selected_team = st.selectbox("Select Your Team:", list(team_directory.keys()))
     team_data = team_directory[selected_team]
 
     data_source = st.radio("Select Data Source:", ["AES", "SportsWrench"], horizontal=True)
-
     pool_url = st.text_input("Post today's AES Pool/Bracket overview link:")
 
 st.divider()
@@ -319,7 +303,6 @@ if st.session_state.scraped_stats:
     st.write("### 🔍 Scout Opponents")
     sorted_team_names = sorted(list(st.session_state.scraped_stats.keys()))
 
-    # Wrap the multiselect in a white tile
     with st.container(border=True):
         selected_opponents = st.multiselect(
             "Search and select opponents to build your radar:",
