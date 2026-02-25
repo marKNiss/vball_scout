@@ -12,7 +12,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 import time
 import re
-import shutil  # Added to detect cloud vs local
+import shutil  
 
 st.set_page_config(page_title="Vball Scout", page_icon="🏐", layout="wide")
 st.title("🏐 Vball Scout")
@@ -40,6 +40,51 @@ if 'home_table' not in st.session_state:
     st.session_state.home_table = None
 if 'opp_table' not in st.session_state:
     st.session_state.opp_table = None
+
+# --- HELPER: SCRAPE LIVE POOL DATA ---
+def scrape_pool_data(url):
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('--no-sandbox')               
+    options.add_argument('--disable-dev-shm-usage')    
+    
+    if shutil.which("chromium"):
+        options.binary_location = shutil.which("chromium")
+        svc = Service(shutil.which("chromedriver"))
+    else:
+        svc = Service(ChromeDriverManager().install())
+        
+    driver = webdriver.Chrome(service=svc, options=options)
+    temp_stats = {}
+    
+    try:
+        driver.get(url)
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "k-grid-table")))
+        time.sleep(3) 
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        for table in soup.find_all('table', class_='k-grid-table'):
+            for row in table.find_all('tr'):
+                cols = [c.text.strip().replace('‡', '').replace('†', '') for c in row.find_all('td') if c.text.strip()]
+                if len(cols) >= 5:
+                    team_name = next((c for c in cols if len(c) > 3 and not c.replace('%', '').replace('.', '').isdigit()), "")
+                    digits = [c for c in cols if c.isdigit() or c == '-']
+                    digits = ['0' if x == '-' else x for x in digits]
+                    
+                    if team_name and len(digits) >= 4:
+                        temp_stats[team_name] = {
+                            "Pool (Match)": f"{digits[0]}-{digits[1]}",
+                            "Pool (Set)": f"{digits[2]}-{digits[3]}"
+                        }
+    except Exception as e:
+        print(f"Pool Scrape Error: {e}")
+    finally:
+        driver.quit()
+        
+    return temp_stats
 
 # --- HELPER: SEARCH A SPECIFIC AES RANKINGS URL ---
 def search_aes_database(driver, url, search_term):
@@ -155,54 +200,13 @@ if st.button("1. Load Tournament Data") and pool_url:
         st.info("🚧 SportsWrench integration is coming in the next update! Please select AES for now.")
     else:
         with st.spinner("Extracting and alphabetizing the division..."):
-            options = Options()
-            options.add_argument('--headless')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--window-size=1920,1080')
-            options.add_argument('--no-sandbox')               
-            options.add_argument('--disable-dev-shm-usage')    
+            temp_stats = scrape_pool_data(pool_url)
             
-            # Cloud vs Local Setup
-            if shutil.which("chromium"):
-                options.binary_location = shutil.which("chromium")
-                svc = Service(shutil.which("chromedriver"))
+            if temp_stats:
+                st.session_state.scraped_stats = temp_stats
+                st.success(f"Successfully loaded and sorted {len(temp_stats)} teams!")
             else:
-                svc = Service(ChromeDriverManager().install())
-                
-            driver = webdriver.Chrome(service=svc, options=options)
-            
-            try:
-                driver.get(pool_url)
-                WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "k-grid-table")))
-                time.sleep(3) 
-                
-                soup = BeautifulSoup(driver.page_source, 'html.parser')
-                driver.quit()
-                
-                temp_stats = {}
-                for table in soup.find_all('table', class_='k-grid-table'):
-                    for row in table.find_all('tr'):
-                        cols = [c.text.strip().replace('‡', '').replace('†', '') for c in row.find_all('td') if c.text.strip()]
-                        if len(cols) >= 5:
-                            team_name = next((c for c in cols if len(c) > 3 and not c.replace('%', '').replace('.', '').isdigit()), "")
-                            digits = [c for c in cols if c.isdigit() or c == '-']
-                            digits = ['0' if x == '-' else x for x in digits]
-                            
-                            if team_name and len(digits) >= 4:
-                                temp_stats[team_name] = {
-                                    "Pool (Match)": f"{digits[0]}-{digits[1]}",
-                                    "Pool (Set)": f"{digits[2]}-{digits[3]}"
-                                }
-                
-                if temp_stats:
-                    st.session_state.scraped_stats = temp_stats
-                    st.success(f"Successfully loaded and sorted {len(temp_stats)} teams!")
-                else:
-                    st.error("⚠️ Couldn't find the team list. Check the link.")
-                    
-            except Exception as e:
-                driver.quit()
-                st.error(f"⚠️ Scraper timed out. Error: {e}")
+                st.error("⚠️ Couldn't find the team list. Check the link.")
 
 # --- THE UI: SEARCH & GENERATE ---
 if st.session_state.scraped_stats:
@@ -229,7 +233,6 @@ if st.session_state.scraped_stats:
                 options.add_argument('--no-sandbox')               
                 options.add_argument('--disable-dev-shm-usage')    
                 
-                # Cloud vs Local Setup
                 if shutil.which("chromium"):
                     options.binary_location = shutil.which("chromium")
                     svc = Service(shutil.which("chromedriver"))
@@ -284,6 +287,34 @@ if st.session_state.scraped_stats:
 
 # ALWAYS DISPLAY TABLES IF THEY EXIST IN MEMORY
 if st.session_state.home_table is not None and st.session_state.opp_table is not None:
+    
+    # --- NEW: LIGHTWEIGHT REFRESH BUTTON ---
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("🔄 Refresh Live Scores"):
+            if pool_url:
+                with st.spinner("Fetching latest pool results..."):
+                    fresh_stats = scrape_pool_data(pool_url)
+                    
+                    if fresh_stats:
+                        # Update Home Team
+                        for scraped_name, stats in fresh_stats.items():
+                            if team_data["code"].lower() in scraped_name.lower() or "waves" in scraped_name.lower():
+                                st.session_state.home_table.at[0, 'Pool (Match)'] = stats['Pool (Match)']
+                                st.session_state.home_table.at[0, 'Pool (Set)'] = stats['Pool (Set)']
+                                break
+                        
+                        # Update Opponents
+                        for index, row in st.session_state.opp_table.iterrows():
+                            opp_name = row['Team']
+                            if opp_name in fresh_stats:
+                                st.session_state.opp_table.at[index, 'Pool (Match)'] = fresh_stats[opp_name]['Pool (Match)']
+                                st.session_state.opp_table.at[index, 'Pool (Set)'] = fresh_stats[opp_name]['Pool (Set)']
+                        
+                        st.rerun() # Instantly redraw the screen with new stats
+            else:
+                st.warning("Please enter a valid pool link at the top to refresh.")
+
     st.write(f"### 🌊 {selected_team}")
     st.dataframe(st.session_state.home_table, hide_index=True)
     
